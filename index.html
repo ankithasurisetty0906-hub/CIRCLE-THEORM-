@@ -3,85 +3,115 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Circle Theorem: Final Version</title>
+    <title>Circle Theorem: Side-by-Side</title>
     <style>
         :root { --primary: #2563eb; --secondary: #db2777; --bg: #f8fafc; }
-        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
-        .card { background: white; padding: 1.5rem; border-radius: 1.5rem; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); max-width: 650px; width: 100%; position: relative; border: 1px solid #e2e8f0; }
-        h1 { margin: 0 0 1rem 0; font-size: 1.25rem; text-align: center; color: #1e293b; }
-        svg { width: 100%; height: auto; aspect-ratio: 1/1; touch-action: none; border-radius: 0.75rem; background: #ffffff; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 10px; }
         
-        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
-        .input-group { display: flex; flex-direction: column; gap: 5px; }
-        label { font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
-        input { padding: 12px; border: 2px solid #e2e8f0; border-radius: 0.75rem; font-size: 1.2rem; font-weight: bold; color: #1e293b; transition: all 0.2s; }
-        input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1); }
+        .card { 
+            background: white; padding: 1.5rem; border-radius: 1.5rem; 
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); 
+            width: 100%; max-width: 950px; position: relative; border: 1px solid #e2e8f0; 
+        }
+
+        h1 { margin: 0 0 1.5rem 0; font-size: 1.4rem; text-align: center; color: #1e293b; width: 100%; }
+
+        /* This creates the Side-by-Side Layout */
+        .app-container { 
+            display: flex; 
+            flex-direction: row; /* Horizontal layout */
+            align-items: center; 
+            gap: 30px; 
+        }
+
+        /* Logic for smaller screens (like phones) */
+        @media (max-width: 750px) {
+            .app-container { flex-direction: column; }
+            .card { max-width: 500px; }
+        }
+
+        .svg-container { flex: 2; position: relative; min-width: 300px; }
         
+        svg { width: 100%; height: auto; aspect-ratio: 1/1; touch-action: none; border-radius: 1rem; background: #ffffff; border: 1px solid #f1f5f9; }
+        
+        .controls { 
+            flex: 1; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 25px; 
+            background: #f8fafc; 
+            padding: 20px; 
+            border-radius: 1rem; 
+            border: 1px solid #e2e8f0;
+            min-width: 220px;
+        }
+
+        .input-group { display: flex; flex-direction: column; gap: 8px; }
+        label { font-size: 0.75rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+        input { 
+            padding: 12px; border: 2px solid #cbd5e1; border-radius: 0.75rem; 
+            font-size: 1.4rem; font-weight: bold; color: #1e293b; text-align: center;
+        }
+        input:focus { outline: none; border-color: var(--primary); background: #fff; }
+
+        /* Drawing Styles */
         .angle-arc { fill: none; stroke-width: 3; opacity: 0.6; stroke-linecap: round; }
         .arc-center { stroke: var(--secondary); }
         .arc-circ { stroke: var(--primary); }
-        
-        .angle-label { font-size: 18px; font-weight: 800; pointer-events: none; }
+        .angle-label { font-size: 19px; font-weight: 800; pointer-events: none; }
         .center-val { fill: var(--secondary); }
         .circ-val { fill: var(--primary); }
         
         #warning { 
-            position: absolute; top: 75px; left: 50%; transform: translateX(-50%);
-            background: #fffbeb; color: #b45309; padding: 6px 16px; border-radius: 99px;
-            font-size: 0.75rem; font-weight: bold; border: 1px solid #fde68a;
-            display: none; pointer-events: none; z-index: 10;
+            position: absolute; top: 10px; right: 10px;
+            background: #fffbeb; color: #b45309; padding: 6px 12px; border-radius: 10px;
+            font-size: 0.7rem; font-weight: bold; border: 1px solid #fde68a;
+            display: none; z-index: 10;
         }
 
-        .draggable { cursor: move; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); }
+        .draggable { cursor: move; }
         text { user-select: none; font-variant-numeric: tabular-nums; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h1>Circle Theorem Animation</h1>
-        <div id="warning">REFLEX ANGLE CASE</div>
+        <h1>Circle Theorem Investigation</h1>
         
-        <svg id="canvas" viewBox="0 0 500 500">
-            <!-- Background Grid Circle -->
-            <circle cx="250" cy="250" r="200" fill="none" stroke="#f1f5f9" stroke-width="8" />
-            <circle cx="250" cy="250" r="200" fill="none" stroke="#e2e8f0" stroke-width="2" />
-            
-            <!-- Angle Arcs -->
-            <path id="arc-center" class="angle-arc arc-center" />
-            <path id="arc-circ" class="angle-arc arc-circ" />
-
-            <!-- Geometry Lines -->
-            <line id="line-OA" x1="250" y1="250" stroke="var(--secondary)" stroke-width="2.5" />
-            <line id="line-OB" x1="250" y1="250" stroke="var(--secondary)" stroke-width="2.5" />
-            <line id="line-CA" stroke="var(--primary)" stroke-width="2.5" stroke-dasharray="4 2" />
-            <line id="line-CB" stroke="var(--primary)" stroke-width="2.5" stroke-dasharray="4 2" />
-
-            <!-- Dynamic Angle Values -->
-            <text id="val-center" class="angle-label center-val"></text>
-            <text id="val-circ" class="angle-label circ-val"></text>
-
-            <!-- Draggable Points -->
-            <circle id="O" cx="250" cy="250" r="6" fill="#1e293b" />
-            <circle id="A" class="draggable" r="14" fill="var(--secondary)" />
-            <circle id="B" class="draggable" r="14" fill="var(--secondary)" />
-            <circle id="C" class="draggable" r="14" fill="var(--primary)" />
-
-            <!-- Point Labels (Offset for clarity) -->
-            <text id="txt-O" x="235" y="240" font-size="16" font-weight="bold" fill="#94a3b8">O</text>
-            <text id="txt-A" font-weight="bold" font-size="20"></text>
-            <text id="txt-B" font-weight="bold" font-size="20"></text>
-            <text id="txt-C" font-weight="bold" font-size="20"></text>
-        </svg>
-
-        <div class="controls">
-            <div class="input-group">
-                <label>∠AOB (at center)</label>
-                <input type="number" id="inp-center" step="1">
+        <div class="app-container">
+            <div class="svg-container">
+                <div id="warning">REFLEX ANGLE CASE</div>
+                <svg id="canvas" viewBox="0 0 500 500">
+                    <circle cx="250" cy="250" r="200" fill="none" stroke="#e2e8f0" stroke-width="2" />
+                    <path id="arc-center" class="angle-arc arc-center" />
+                    <path id="arc-circ" class="angle-arc arc-circ" />
+                    <line id="line-OA" x1="250" y1="250" stroke="var(--secondary)" stroke-width="2.5" />
+                    <line id="line-OB" x1="250" y1="250" stroke="var(--secondary)" stroke-width="2.5" />
+                    <line id="line-CA" stroke="var(--primary)" stroke-width="2.5" stroke-dasharray="5 3" />
+                    <line id="line-CB" stroke="var(--primary)" stroke-width="2.5" stroke-dasharray="5 3" />
+                    <text id="val-center" class="angle-label center-val"></text>
+                    <text id="val-circ" class="angle-label circ-val"></text>
+                    <circle id="O" cx="250" cy="250" r="6" fill="#1e293b" />
+                    <circle id="A" class="draggable" r="15" fill="var(--secondary)" />
+                    <circle id="B" class="draggable" r="15" fill="var(--secondary)" />
+                    <circle id="C" class="draggable" r="15" fill="var(--primary)" />
+                    <text id="txt-O" x="235" y="240" font-size="16" font-weight="bold" fill="#94a3b8">O</text>
+                    <text id="txt-A" font-weight="bold" font-size="22"></text>
+                    <text id="txt-B" font-weight="bold" font-size="22"></text>
+                    <text id="txt-C" font-weight="bold" font-size="22"></text>
+                </svg>
             </div>
-            <div class="input-group">
-                <label>∠ACB (at circumference)</label>
-                <input type="number" id="inp-circ" step="1">
+
+            <div class="controls">
+                <div class="input-group">
+                    <label>∠AOB (Center)</label>
+                    <input type="number" id="inp-center">
+                </div>
+                <div class="input-group">
+                    <label>∠ACB (Circumference)</label>
+                    <input type="number" id="inp-circ">
+                </div>
+                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag points A, B, or C around the circle to see the relationship.</p>
             </div>
         </div>
     </div>
@@ -91,118 +121,86 @@
     const inpCenter = document.getElementById('inp-center');
     const inpCirc = document.getElementById('inp-circ');
     const warning = document.getElementById('warning');
-    
     let state = { A: 210, B: 330, C: 60, active: null };
 
-    // Math Helpers
-    function polarToXY(angleDeg, radius, center = {x:250, y:250}) {
-        const rad = angleDeg * Math.PI / 180;
-        return { x: center.x + radius * Math.cos(rad), y: center.y + radius * Math.sin(rad) };
+    function polarToXY(deg, r, center = {x:250, y:250}) {
+        const rad = deg * Math.PI / 180;
+        return { x: center.x + r * Math.cos(rad), y: center.y + r * Math.sin(rad) };
     }
 
-    function drawArc(cx, cy, r, startDeg, endDeg, sweepFlag = 1) {
-        const start = polarToXY(startDeg, r, {x:cx, y:cy});
-        const end = polarToXY(endDeg, r, {x:cx, y:cy});
-        
-        // Decide if the arc should be the large version (reflex)
-        let diff = endDeg - startDeg;
+    function drawArc(cx, cy, r, start, end, sweep = 1) {
+        const s = polarToXY(start, r, {x:cx, y:cy});
+        const e = polarToXY(end, r, {x:cx, y:cy});
+        let diff = end - start;
         while (diff < 0) diff += 360;
-        while (diff > 360) diff -= 360;
-        const largeArc = diff > 180 ? 1 : 0;
-        
-        return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${end.x} ${end.y}`;
+        const large = diff > 180 ? 1 : 0;
+        return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} ${sweep} ${e.x} ${e.y}`;
     }
 
     function update() {
         const cx = 250, cy = 250, r = 200;
-        const pts = {
-            A: polarToXY(state.A, r),
-            B: polarToXY(state.B, r),
-            C: polarToXY(state.C, r)
-        };
+        const pts = { A: polarToXY(state.A, r), B: polarToXY(state.B, r), C: polarToXY(state.C, r) };
 
-        // 1. Move Points and Push Labels Further Out (Offset: 35px)
         ['A', 'B', 'C'].forEach(id => {
             document.getElementById(id).setAttribute('cx', pts[id].x);
             document.getElementById(id).setAttribute('cy', pts[id].y);
             const t = document.getElementById('txt-' + id);
-            const pos = polarToXY(state[id], r + 35); // increased offset
-            t.setAttribute('x', pos.x - 8);
-            t.setAttribute('y', pos.y + 8);
+            const pos = polarToXY(state[id], r + 35);
+            t.setAttribute('x', pos.x - 8); t.setAttribute('y', pos.y + 8);
             t.textContent = id;
         });
 
-        // 2. Geometry Lines
         document.getElementById('line-OA').setAttribute('x2', pts.A.x);
         document.getElementById('line-OA').setAttribute('y2', pts.A.y);
         document.getElementById('line-OB').setAttribute('x2', pts.B.x);
         document.getElementById('line-OB').setAttribute('y2', pts.B.y);
-        
-        ['line-CA', 'line-CB'].forEach(id => {
-            const l = document.getElementById(id);
-            l.setAttribute('x1', pts.C.x); l.setAttribute('y1', pts.C.y);
-            l.setAttribute('x2', pts[id.slice(-1)].x); l.setAttribute('y2', pts[id.slice(-1)].y);
-        });
+        document.getElementById('line-CA').setAttribute('x1', pts.C.x);
+        document.getElementById('line-CA').setAttribute('y1', pts.C.y);
+        document.getElementById('line-CA').setAttribute('x2', pts.A.x);
+        document.getElementById('line-CA').setAttribute('y2', pts.A.y);
+        document.getElementById('line-CB').setAttribute('x1', pts.C.x);
+        document.getElementById('line-CB').setAttribute('y1', pts.C.y);
+        document.getElementById('line-CB').setAttribute('x2', pts.B.x);
+        document.getElementById('line-CB').setAttribute('y2', pts.B.y);
 
-        // 3. Logic: Reflex vs Minor Arc
         let diff = state.B - state.A;
         if (diff < 0) diff += 360;
-
         let cRel = state.C - state.A;
         if (cRel < 0) cRel += 360;
+        const isReflex = cRel > 0 && cRel < diff;
         
-        const isCInGap = cRel > 0 && cRel < diff;
-        
-        let centerAng, circAng, isReflex;
+        let cenAng = isReflex ? 360 - diff : diff;
+        warning.style.display = isReflex ? 'block' : 'none';
+        let circAng = Math.round(cenAng / 2);
 
-        if (isCInGap) {
-            centerAng = 360 - diff;
-            isReflex = true;
-            warning.style.display = 'block';
-        } else {
-            centerAng = diff;
-            isReflex = false;
-            warning.style.display = 'none';
-        }
-        circAng = Math.round(centerAng / 2);
-
-        // 4. Draw Center Arc
         if (isReflex) {
             document.getElementById('arc-center').setAttribute("d", drawArc(cx, cy, 40, state.B, state.A, 1));
         } else {
             document.getElementById('arc-center').setAttribute("d", drawArc(cx, cy, 40, state.A, state.B, 1));
         }
 
-        // 5. Draw Circumference Arc (Robust logic to prevent "jumping")
         let angCA = Math.atan2(pts.A.y - pts.C.y, pts.A.x - pts.C.x) * 180 / Math.PI;
         let angCB = Math.atan2(pts.B.y - pts.C.y, pts.B.x - pts.C.x) * 180 / Math.PI;
-        
-        // Calculate the sweep direction to ensure it always draws the inner angle
         let cDiff = angCB - angCA;
         while (cDiff < -180) cDiff += 360;
         while (cDiff > 180) cDiff -= 360;
-        const sweep = cDiff > 0 ? 1 : 0;
-        
-        document.getElementById('arc-circ').setAttribute("d", drawArc(pts.C.x, pts.C.y, 40, angCA, angCB, sweep));
+        document.getElementById('arc-circ').setAttribute("d", drawArc(pts.C.x, pts.C.y, 40, angCA, angCB, cDiff > 0 ? 1 : 0));
 
-        // 6. Update Value Text (Offset for clarity)
-        const midCenDeg = isReflex ? (state.B + (360-diff)/2) : (state.A + diff/2);
-        const cenLblPos = polarToXY(midCenDeg, 75); // Moved further from center
-        const cenLbl = document.getElementById('val-center');
-        cenLbl.setAttribute('x', cenLblPos.x - 15); cenLbl.setAttribute('y', cenLblPos.y + 7);
-        cenLbl.textContent = Math.round(centerAng) + "°";
+        const midCen = isReflex ? (state.B + (360-diff)/2) : (state.A + diff/2);
+        const cp = polarToXY(midCen, 75);
+        document.getElementById('val-center').setAttribute('x', cp.x - 15);
+        document.getElementById('val-center').setAttribute('y', cp.y + 7);
+        document.getElementById('val-center').textContent = Math.round(cenAng) + "°";
 
-        const circLblPos = polarToXY(state.C, r - 55); // Moved further from edge
-        const circLbl = document.getElementById('val-circ');
-        circLbl.setAttribute('x', circLblPos.x - 15); circLbl.setAttribute('y', circLblPos.y + 7);
-        circLbl.textContent = circAng + "°";
+        const crp = polarToXY(state.C, r - 60);
+        document.getElementById('val-circ').setAttribute('x', crp.x - 15);
+        document.getElementById('val-circ').setAttribute('y', crp.y + 7);
+        document.getElementById('val-circ').textContent = circAng + "°";
 
-        // Update Inputs
-        inpCenter.value = Math.round(centerAng);
+        inpCenter.value = Math.round(cenAng);
         inpCirc.value = circAng;
     }
 
-    // Input Handling
     const getAng = (x, y) => {
         const rect = svg.getBoundingClientRect();
         let a = Math.atan2(y - (rect.top + rect.height/2), x - (rect.left + rect.width/2)) * 180 / Math.PI;
@@ -218,21 +216,14 @@
     };
 
     svg.addEventListener('mousedown', e => { if(e.target.classList.contains('draggable')) state.active = e.target.id; });
-    svg.addEventListener('touchstart', e => { if(e.target.classList.contains('draggable')) state.active = e.target.id; e.preventDefault(); });
+    svg.addEventListener('touchstart', e => { if(e.target.classList.contains('draggable')) { state.active = e.target.id; e.preventDefault(); } });
     window.addEventListener('mousemove', move);
     window.addEventListener('touchmove', move, {passive: false});
     window.addEventListener('mouseup', () => state.active = null);
     window.addEventListener('touchend', () => state.active = null);
 
-    inpCenter.addEventListener('input', e => {
-        state.B = (state.A + (parseInt(e.target.value) || 0)) % 360;
-        update();
-    });
-    inpCirc.addEventListener('input', e => {
-        state.B = (state.A + ((parseInt(e.target.value) || 0) * 2)) % 360;
-        update();
-    });
-
+    inpCenter.addEventListener('input', e => { state.B = (state.A + (parseInt(e.target.value) || 0)) % 360; update(); });
+    inpCirc.addEventListener('input', e => { state.B = (state.A + ((parseInt(e.target.value) || 0) * 2)) % 360; update(); });
     update();
 </script>
 </body>
