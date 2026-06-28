@@ -93,7 +93,7 @@
                     <label>∠ACB (Circumference)</label>
                     <input type="number" id="inp-circ" step="0.5">
                 </div>
-                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag A, B, or C. All calculations support 0.5° increments.</p>
+                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag A, B, or C. Points snap to 0.5° increments.</p>
             </div>
         </div>
     </div>
@@ -104,25 +104,22 @@
     const inpCirc = document.getElementById('inp-circ');
     const warning = document.getElementById('warning');
     
-    let state = { A: 210, B: 330, C: 90, active: null };
+    // Initial State: A=Left, B=Right, C=Top
+    let state = { A: 150, B: 30, C: 270, active: null };
 
     function polarToXY(deg, r, center = {x:250, y:250}) {
         const rad = deg * Math.PI / 180;
         return { x: center.x + r * Math.cos(rad), y: center.y + r * Math.sin(rad) };
     }
 
-    // --- REPLACED HELPER FUNCTION ---
     function getArcPath(cx, cy, r, startDeg, endDeg, forceLarge = false) {
         const start = polarToXY(startDeg, r, {x:cx, y:cy});
         const end = polarToXY(endDeg, r, {x:cx, y:cy});
-        
         let diff = endDeg - startDeg;
         while (diff < 0) diff += 360;
         while (diff > 360) diff -= 360;
-
         const largeArcFlag = forceLarge ? 1 : 0;
-        const sweepFlag = 1; // Clockwise direction
-
+        const sweepFlag = 1; 
         return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} ${sweepFlag} ${end.x} ${end.y}`;
     }
 
@@ -130,7 +127,6 @@
         const cx = 250, cy = 250, r = 200;
         const pts = { A: polarToXY(state.A, r), B: polarToXY(state.B, r), C: polarToXY(state.C, r) };
 
-        // Positions and Text Labels for A, B, C
         ['A', 'B', 'C'].forEach(id => {
             document.getElementById(id).setAttribute('cx', pts[id].x);
             document.getElementById(id).setAttribute('cy', pts[id].y);
@@ -140,7 +136,6 @@
             t.textContent = id;
         });
 
-        // Update Drawing Lines
         document.getElementById('line-OA').setAttribute('x2', pts.A.x);
         document.getElementById('line-OA').setAttribute('y2', pts.A.y);
         document.getElementById('line-OB').setAttribute('x2', pts.B.x);
@@ -154,40 +149,40 @@
         document.getElementById('line-CB').setAttribute('x2', pts.B.x);
         document.getElementById('line-CB').setAttribute('y2', pts.B.y);
 
-        // Core Circle Theorem Logic
-        let diff = state.B - state.A;
-        while (diff < 0) diff += 360;
+        // Calculate clockwise difference from A to B
+        let centerDiff = state.B - state.A;
+        while (centerDiff < 0) centerDiff += 360;
+        
         let cRel = state.C - state.A;
         while (cRel < 0) cRel += 360;
         
-        const isReflex = cRel > 0 && cRel < diff;
-        let cenAng = isReflex ? 360 - diff : diff;
+        // Reflex if C is on the minor arc A-B
+        const isReflex = cRel > 0 && cRel < centerDiff;
+        let cenAng = isReflex ? 360 - centerDiff : centerDiff;
+        
+        // Precise math calculation
         let circAng = cenAng / 2;
 
         warning.style.display = isReflex ? 'block' : 'none';
 
-        // --- UPDATED FIXED CENTER ARC LOGIC ---
-        let centerSweep = state.B - state.A;
-        while (centerSweep < 0) centerSweep += 360;
-
+        // Center Arc Logic
         if (isReflex) {
-            if (centerSweep > 180) {
+            if (centerDiff > 180) {
                 document.getElementById('arc-center').setAttribute("d", getArcPath(cx, cy, 45, state.A, state.B, true));
             } else {
                 document.getElementById('arc-center').setAttribute("d", getArcPath(cx, cy, 45, state.B, state.A, true));
             }
         } else {
-            if (centerSweep < 180) {
+            if (centerDiff < 180) {
                 document.getElementById('arc-center').setAttribute("d", getArcPath(cx, cy, 45, state.A, state.B, false));
             } else {
                 document.getElementById('arc-center').setAttribute("d", getArcPath(cx, cy, 45, state.B, state.A, false));
             }
         }
 
-        // --- UPDATED FIXED CIRCUMFERENCE ARC LOGIC ---
+        // Circumference Arc Logic
         let angCA = Math.atan2(pts.A.y - pts.C.y, pts.A.x - pts.C.x) * 180 / Math.PI;
         let angCB = Math.atan2(pts.B.y - pts.C.y, pts.B.x - pts.C.x) * 180 / Math.PI;
-        
         let sweep = angCB - angCA;
         while (sweep < 0) sweep += 360;
 
@@ -197,20 +192,22 @@
             document.getElementById('arc-circ').setAttribute("d", getArcPath(pts.C.x, pts.C.y, 40, angCB, angCA, false));
         }
 
-        // --- POSITION VALUE LABELS ---
-        const midCen = isReflex ? (state.B + (360-diff)/2) : (state.A + diff/2);
+        // Value Formatting (fixes the .5 rounding errors)
+        const formatNum = (n) => parseFloat(Number(n).toFixed(2));
+
+        const midCen = isReflex ? (state.A + (360 - centerDiff) / 2 + centerDiff) : (state.A + centerDiff / 2);
         const cp = polarToXY(midCen, 85);
         document.getElementById('val-center').setAttribute('x', cp.x);
         document.getElementById('val-center').setAttribute('y', cp.y);
-        document.getElementById('val-center').textContent = parseFloat(cenAng.toFixed(1)) + "°";
+        document.getElementById('val-center').textContent = formatNum(cenAng) + "°";
 
         const crp = polarToXY(state.C, r - 70);
         document.getElementById('val-circ').setAttribute('x', crp.x);
         document.getElementById('val-circ').setAttribute('y', crp.y);
-        document.getElementById('val-circ').textContent = parseFloat(circAng.toFixed(1)) + "°";
+        document.getElementById('val-circ').textContent = formatNum(circAng) + "°";
 
-        inpCenter.value = parseFloat(cenAng.toFixed(1));
-        inpCirc.value = parseFloat(circAng.toFixed(1));
+        inpCenter.value = formatNum(cenAng);
+        inpCirc.value = formatNum(circAng);
     }
 
     const getAng = (x, y) => {
@@ -224,7 +221,7 @@
         const cX = e.touches ? e.touches[0].clientX : e.clientX;
         const cY = e.touches ? e.touches[0].clientY : e.clientY;
         let rawAng = getAng(cX, cY);
-        // Snapping interaction to 0.5 for consistency
+        // Snapping to 0.5 degrees during dragging keeps math perfect
         state[state.active] = Math.round(rawAng * 2) / 2;
         update();
     };
