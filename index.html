@@ -16,12 +16,7 @@
 
         h1 { margin: 0 0 1.5rem 0; font-size: 1.4rem; text-align: center; color: #1e293b; width: 100%; }
 
-        .app-container { 
-            display: flex; 
-            flex-direction: row; 
-            align-items: center; 
-            gap: 30px; 
-        }
+        .app-container { display: flex; flex-direction: row; align-items: center; gap: 30px; }
 
         @media (max-width: 750px) {
             .app-container { flex-direction: column; }
@@ -29,19 +24,11 @@
         }
 
         .svg-container { flex: 2; position: relative; min-width: 300px; }
-        
         svg { width: 100%; height: auto; aspect-ratio: 1/1; touch-action: none; border-radius: 1rem; background: #ffffff; border: 1px solid #f1f5f9; }
         
         .controls { 
-            flex: 1; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 25px; 
-            background: #f8fafc; 
-            padding: 20px; 
-            border-radius: 1rem; 
-            border: 1px solid #e2e8f0;
-            min-width: 220px;
+            flex: 1; display: flex; flex-direction: column; gap: 25px; background: #f8fafc; 
+            padding: 20px; border-radius: 1rem; border: 1px solid #e2e8f0; min-width: 220px;
         }
 
         .input-group { display: flex; flex-direction: column; gap: 8px; }
@@ -50,12 +37,11 @@
             padding: 12px; border: 2px solid #cbd5e1; border-radius: 0.75rem; 
             font-size: 1.4rem; font-weight: bold; color: #1e293b; text-align: center;
         }
-        input:focus { outline: none; border-color: var(--primary); background: #fff; }
 
         .angle-arc { fill: none; stroke-width: 3; opacity: 0.6; stroke-linecap: round; }
         .arc-center { stroke: var(--secondary); }
         .arc-circ { stroke: var(--primary); }
-        .angle-label { font-size: 19px; font-weight: 800; pointer-events: none; }
+        .angle-label { font-size: 20px; font-weight: 800; pointer-events: none; text-shadow: 1px 1px 0px white; }
         .center-val { fill: var(--secondary); }
         .circ-val { fill: var(--primary); }
         
@@ -67,7 +53,6 @@
         }
 
         .draggable { cursor: move; }
-        text { user-select: none; font-variant-numeric: tabular-nums; }
     </style>
 </head>
 <body>
@@ -86,8 +71,8 @@
                     <line id="line-OB" x1="250" y1="250" stroke="var(--secondary)" stroke-width="2.5" />
                     <line id="line-CA" stroke="var(--primary)" stroke-width="2.5" stroke-dasharray="5 3" />
                     <line id="line-CB" stroke="var(--primary)" stroke-width="2.5" stroke-dasharray="5 3" />
-                    <text id="val-center" class="angle-label center-val"></text>
-                    <text id="val-circ" class="angle-label circ-val"></text>
+                    <text id="val-center" class="angle-label center-val" text-anchor="middle"></text>
+                    <text id="val-circ" class="angle-label circ-val" text-anchor="middle"></text>
                     <circle id="O" cx="250" cy="250" r="6" fill="#1e293b" />
                     <circle id="A" class="draggable" r="15" fill="var(--secondary)" />
                     <circle id="B" class="draggable" r="15" fill="var(--secondary)" />
@@ -102,14 +87,13 @@
             <div class="controls">
                 <div class="input-group">
                     <label>∠AOB (Center)</label>
-                    <!-- step="0.5" allows decimal increments -->
                     <input type="number" id="inp-center" step="0.5">
                 </div>
                 <div class="input-group">
                     <label>∠ACB (Circumference)</label>
                     <input type="number" id="inp-circ" step="0.5">
                 </div>
-                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag A, B, or C. Use inputs for precise 0.5° steps.</p>
+                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag A, B, or C. Calculations support 0.5° steps.</p>
             </div>
         </div>
     </div>
@@ -120,21 +104,28 @@
     const inpCirc = document.getElementById('inp-circ');
     const warning = document.getElementById('warning');
     
-    // Initialized so A is usually left, B right, C top
-    let state = { A: 150, B: 30, C: 270, active: null };
+    let state = { A: 210, B: 330, C: 90, active: null };
 
     function polarToXY(deg, r, center = {x:250, y:250}) {
         const rad = deg * Math.PI / 180;
         return { x: center.x + r * Math.cos(rad), y: center.y + r * Math.sin(rad) };
     }
 
-    function drawArc(cx, cy, r, start, end, sweep = 1) {
-        const s = polarToXY(start, r, {x:cx, y:cy});
-        const e = polarToXY(end, r, {x:cx, y:cy});
-        let diff = end - start;
+    // Improved Arc function to prevent "full circle" glitches
+    function drawSimpleArc(cx, cy, r, startDeg, endDeg, clockwise) {
+        const start = polarToXY(startDeg, r, {x:cx, y:cy});
+        const end = polarToXY(endDeg, r, {x:cx, y:cy});
+        
+        let diff = endDeg - startDeg;
         while (diff < 0) diff += 360;
-        const large = diff > 180 ? 1 : 0;
-        return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} ${sweep} ${e.x} ${e.y}`;
+        while (diff > 360) diff -= 360;
+
+        const sweepFlag = clockwise ? 1 : 0;
+        // If we want the "short" way, largeArc is 0. If diff > 180, largeArc is 1.
+        let largeArcFlag = diff > 180 ? 1 : 0;
+        if (!clockwise) largeArcFlag = diff > 180 ? 0 : 1;
+
+        return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} ${sweepFlag} ${end.x} ${end.y}`;
     }
 
     function update() {
@@ -142,9 +133,8 @@
         const pts = { A: polarToXY(state.A, r), B: polarToXY(state.B, r), C: polarToXY(state.C, r) };
 
         ['A', 'B', 'C'].forEach(id => {
-            const el = document.getElementById(id);
-            el.setAttribute('cx', pts[id].x);
-            el.setAttribute('cy', pts[id].y);
+            document.getElementById(id).setAttribute('cx', pts[id].x);
+            document.getElementById(id).setAttribute('cy', pts[id].y);
             const t = document.getElementById('txt-' + id);
             const pos = polarToXY(state[id], r + 35);
             t.setAttribute('x', pos.x - 8); t.setAttribute('y', pos.y + 8);
@@ -164,44 +154,47 @@
         document.getElementById('line-CB').setAttribute('x2', pts.B.x);
         document.getElementById('line-CB').setAttribute('y2', pts.B.y);
 
-        // Logic for Angle AOB (Center Angle)
-        let diff = state.A - state.B; 
-        if (diff < 0) diff += 360;
+        // Logic for Center Angle (A to B)
+        let diff = state.B - state.A;
+        while (diff < 0) diff += 360;
         
-        // Determine if C is on the minor or major arc to trigger reflex mode
-        let cRel = state.C - state.B;
-        if (cRel < 0) cRel += 360;
+        let cRel = state.C - state.A;
+        while (cRel < 0) cRel += 360;
+        
+        // Reflex happens if C is "between" A and B on the minor arc
         const isReflex = cRel > 0 && cRel < diff;
-        
         let cenAng = isReflex ? 360 - diff : diff;
         warning.style.display = isReflex ? 'block' : 'none';
-        
-        // ALLOW DECIMALS (0.5)
         let circAng = cenAng / 2;
 
+        // Draw Center Arc
         if (isReflex) {
-            document.getElementById('arc-center').setAttribute("d", drawArc(cx, cy, 40, state.A, state.B, 1));
+            document.getElementById('arc-center').setAttribute("d", drawSimpleArc(cx, cy, 40, state.B, state.A, true));
         } else {
-            document.getElementById('arc-center').setAttribute("d", drawArc(cx, cy, 40, state.B, state.A, 1));
+            document.getElementById('arc-center').setAttribute("d", drawSimpleArc(cx, cy, 40, state.A, state.B, true));
         }
 
+        // Draw Circumference Arc (at Point C)
         let angCA = Math.atan2(pts.A.y - pts.C.y, pts.A.x - pts.C.x) * 180 / Math.PI;
         let angCB = Math.atan2(pts.B.y - pts.C.y, pts.B.x - pts.C.x) * 180 / Math.PI;
-        let cDiff = angCB - angCA;
-        while (cDiff < -180) cDiff += 360;
-        while (cDiff > 180) cDiff -= 360;
-        document.getElementById('arc-circ').setAttribute("d", drawArc(pts.C.x, pts.C.y, 40, angCA, angCB, cDiff > 0 ? 1 : 0));
+        
+        let angleDiff = angCB - angCA;
+        while (angleDiff < -180) angleDiff += 360;
+        while (angleDiff > 180) angleDiff -= 360;
+        
+        // Use a fixed small arc at C that doesn't flip
+        document.getElementById('arc-circ').setAttribute("d", drawSimpleArc(pts.C.x, pts.C.y, 45, angCA, angCB, angleDiff > 0));
 
-        // Update Labels
-        const midCen = isReflex ? (state.A + (360-diff)/2) : (state.B + diff/2);
-        const cp = polarToXY(midCen, 75);
-        document.getElementById('val-center').setAttribute('x', cp.x - 20);
-        document.getElementById('val-center').setAttribute('y', cp.y + 7);
+        // Update Text Labels
+        const midCen = isReflex ? (state.B + (360-diff)/2) : (state.A + diff/2);
+        const cp = polarToXY(midCen, 80);
+        document.getElementById('val-center').setAttribute('x', cp.x);
+        document.getElementById('val-center').setAttribute('y', cp.y);
         document.getElementById('val-center').textContent = parseFloat(cenAng.toFixed(1)) + "°";
 
-        const crp = polarToXY(state.C, r - 60);
-        document.getElementById('val-circ').setAttribute('x', crp.x - 20);
-        document.getElementById('val-circ').setAttribute('y', crp.y + 7);
+        const crp = polarToXY(state.C, r - 75);
+        document.getElementById('val-circ').setAttribute('x', crp.x);
+        document.getElementById('val-circ').setAttribute('y', crp.y);
         document.getElementById('val-circ').textContent = parseFloat(circAng.toFixed(1)) + "°";
 
         inpCenter.value = parseFloat(cenAng.toFixed(1));
@@ -218,7 +211,7 @@
         if (!state.active) return;
         const cX = e.touches ? e.touches[0].clientX : e.clientX;
         const cY = e.touches ? e.touches[0].clientY : e.clientY;
-        // Dragging snaps to whole numbers, but input allows 0.5
+        // Dragging uses whole numbers for smoothness, input allows 0.5
         state[state.active] = Math.round(getAng(cX, cY));
         update();
     };
@@ -230,15 +223,14 @@
     window.addEventListener('mouseup', () => state.active = null);
     window.addEventListener('touchend', () => state.active = null);
 
-    // Support for 0.5 steps in input
     inpCenter.addEventListener('input', e => { 
         let val = parseFloat(e.target.value) || 0;
-        state.A = (state.B + val) % 360; 
+        state.B = (state.A + val) % 360; 
         update(); 
     });
     inpCirc.addEventListener('input', e => { 
         let val = parseFloat(e.target.value) || 0;
-        state.A = (state.B + (val * 2)) % 360; 
+        state.B = (state.A + (val * 2)) % 360; 
         update(); 
     });
     
