@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Circle Theorem: A-B-C</title>
+    <title>Circle Theorem Investigation</title>
     <style>
         :root { --primary: #2563eb; --secondary: #db2777; --bg: #f8fafc; }
         body { font-family: system-ui, sans-serif; background: var(--bg); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 10px; }
@@ -93,7 +93,7 @@
                     <label>∠ACB (Circumference)</label>
                     <input type="number" id="inp-circ" step="0.5">
                 </div>
-                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag A, B, or C. Use inputs for 0.5° increments.</p>
+                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag A, B, or C. All calculations support 0.5° increments.</p>
             </div>
         </div>
     </div>
@@ -104,7 +104,6 @@
     const inpCirc = document.getElementById('inp-circ');
     const warning = document.getElementById('warning');
     
-    // Initial Setup
     let state = { A: 210, B: 330, C: 90, active: null };
 
     function polarToXY(deg, r, center = {x:250, y:250}) {
@@ -112,11 +111,8 @@
         return { x: center.x + r * Math.cos(rad), y: center.y + r * Math.sin(rad) };
     }
 
-    /**
-     * Fixed Arc Function:
-     * Uses start/end angles and a force-short-path flag to prevent full circles.
-     */
-    function getArcPath(cx, cy, r, startDeg, endDeg, isReflex = false) {
+    // --- REPLACED HELPER FUNCTION ---
+    function getArcPath(cx, cy, r, startDeg, endDeg, forceLarge = false) {
         const start = polarToXY(startDeg, r, {x:cx, y:cy});
         const end = polarToXY(endDeg, r, {x:cx, y:cy});
         
@@ -124,12 +120,8 @@
         while (diff < 0) diff += 360;
         while (diff > 360) diff -= 360;
 
-        // The "Sweep Flag" determines direction. 
-        // The "Large Arc Flag" determines if the arc is > 180 degrees.
-        const sweepFlag = 1;
-        let largeArcFlag = diff > 180 ? 1 : 0;
-        
-        if (isReflex) largeArcFlag = diff > 180 ? 1 : 0; 
+        const largeArcFlag = forceLarge ? 1 : 0;
+        const sweepFlag = 1; // Clockwise direction
 
         return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} ${sweepFlag} ${end.x} ${end.y}`;
     }
@@ -138,7 +130,7 @@
         const cx = 250, cy = 250, r = 200;
         const pts = { A: polarToXY(state.A, r), B: polarToXY(state.B, r), C: polarToXY(state.C, r) };
 
-        // Update Point Positions
+        // Positions and Text Labels for A, B, C
         ['A', 'B', 'C'].forEach(id => {
             document.getElementById(id).setAttribute('cx', pts[id].x);
             document.getElementById(id).setAttribute('cy', pts[id].y);
@@ -148,7 +140,7 @@
             t.textContent = id;
         });
 
-        // Update Lines
+        // Update Drawing Lines
         document.getElementById('line-OA').setAttribute('x2', pts.A.x);
         document.getElementById('line-OA').setAttribute('y2', pts.A.y);
         document.getElementById('line-OB').setAttribute('x2', pts.B.x);
@@ -162,49 +154,50 @@
         document.getElementById('line-CB').setAttribute('x2', pts.B.x);
         document.getElementById('line-CB').setAttribute('y2', pts.B.y);
 
-        // Calculate Angle AOB (Center)
+        // Core Circle Theorem Logic
         let diff = state.B - state.A;
         while (diff < 0) diff += 360;
-        
         let cRel = state.C - state.A;
         while (cRel < 0) cRel += 360;
         
-        // C is on the minor arc if its relative angle is between A and B
         const isReflex = cRel > 0 && cRel < diff;
         let cenAng = isReflex ? 360 - diff : diff;
         let circAng = cenAng / 2;
 
         warning.style.display = isReflex ? 'block' : 'none';
 
-        // Draw Center Arc correctly
+        // --- UPDATED FIXED CENTER ARC LOGIC ---
+        let centerSweep = state.B - state.A;
+        while (centerSweep < 0) centerSweep += 360;
+
         if (isReflex) {
-            // Arc goes from B back to A to show the long way
-            document.getElementById('arc-center').setAttribute("d", getArcPath(cx, cy, 45, state.B, state.A));
+            if (centerSweep > 180) {
+                document.getElementById('arc-center').setAttribute("d", getArcPath(cx, cy, 45, state.A, state.B, true));
+            } else {
+                document.getElementById('arc-center').setAttribute("d", getArcPath(cx, cy, 45, state.B, state.A, true));
+            }
         } else {
-            // Arc goes from A to B to show the short way
-            document.getElementById('arc-center').setAttribute("d", getArcPath(cx, cy, 45, state.A, state.B));
+            if (centerSweep < 180) {
+                document.getElementById('arc-center').setAttribute("d", getArcPath(cx, cy, 45, state.A, state.B, false));
+            } else {
+                document.getElementById('arc-center').setAttribute("d", getArcPath(cx, cy, 45, state.B, state.A, false));
+            }
         }
 
-        // Draw Circumference Arc at C
-        // Use atan2 to get the absolute angle of lines CA and CB
+        // --- UPDATED FIXED CIRCUMFERENCE ARC LOGIC ---
         let angCA = Math.atan2(pts.A.y - pts.C.y, pts.A.x - pts.C.x) * 180 / Math.PI;
         let angCB = Math.atan2(pts.B.y - pts.C.y, pts.B.x - pts.C.x) * 180 / Math.PI;
         
-        // Calculate the interior sweep
         let sweep = angCB - angCA;
-        while (sweep < -180) sweep += 360;
-        while (sweep > 180) sweep -= 360;
+        while (sweep < 0) sweep += 360;
 
-        const startArc = angCA;
-        const endArc = angCA + sweep;
-        
-        // We use a simplified arc path for C to ensure it never loops
-        const sP = polarToXY(startArc, 40, pts.C);
-        const eP = polarToXY(endArc, 40, pts.C);
-        const cSweep = sweep > 0 ? 1 : 0;
-        document.getElementById('arc-circ').setAttribute("d", `M ${sP.x} ${sP.y} A 40 40 0 0 ${cSweep} ${eP.x} ${eP.y}`);
+        if (sweep < 180) {
+            document.getElementById('arc-circ').setAttribute("d", getArcPath(pts.C.x, pts.C.y, 40, angCA, angCB, false));
+        } else {
+            document.getElementById('arc-circ').setAttribute("d", getArcPath(pts.C.x, pts.C.y, 40, angCB, angCA, false));
+        }
 
-        // Labels
+        // --- POSITION VALUE LABELS ---
         const midCen = isReflex ? (state.B + (360-diff)/2) : (state.A + diff/2);
         const cp = polarToXY(midCen, 85);
         document.getElementById('val-center').setAttribute('x', cp.x);
@@ -230,8 +223,8 @@
         if (!state.active) return;
         const cX = e.touches ? e.touches[0].clientX : e.clientX;
         const cY = e.touches ? e.touches[0].clientY : e.clientY;
-        // Interaction snaps to 0.5 for precision
         let rawAng = getAng(cX, cY);
+        // Snapping interaction to 0.5 for consistency
         state[state.active] = Math.round(rawAng * 2) / 2;
         update();
     };
