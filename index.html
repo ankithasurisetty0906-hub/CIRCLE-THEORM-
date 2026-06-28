@@ -38,9 +38,9 @@
             font-size: 1.4rem; font-weight: bold; color: #1e293b; text-align: center;
         }
 
-        .angle-arc { fill: none; stroke-width: 3; opacity: 0.6; stroke-linecap: round; }
+        .angle-arc { fill: rgba(219, 39, 119, 0.1); stroke-width: 3; stroke-linecap: round; }
         .arc-center { stroke: var(--secondary); }
-        .arc-circ { stroke: var(--primary); }
+        .arc-circ { stroke: var(--primary); fill: rgba(37, 99, 235, 0.1); }
         .angle-label { font-size: 20px; font-weight: 800; pointer-events: none; }
         .center-val { fill: var(--secondary); }
         .circ-val { fill: var(--primary); }
@@ -93,7 +93,7 @@
                     <label>∠ACB (Circumference)</label>
                     <input type="number" id="inp-circ" step="0.25">
                 </div>
-                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag A, B, or C. All calculations support 0.5° increments.</p>
+                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag A, B, or C. Use inputs to set reflex angles manually.</p>
             </div>
         </div>
     </div>
@@ -104,7 +104,7 @@
     const inpCirc = document.getElementById('inp-circ');
     const warning = document.getElementById('warning');
     
-    // Initial Setup: A is Bottom-Left, B is Bottom-Right, C is Top
+    // Default: A is Left (210), B is Right (330), C is Top (90)
     let state = { A: 210, B: 330, C: 90, active: null };
 
     function polarToXY(deg, r, center = {x:250, y:250}) {
@@ -112,18 +112,12 @@
         return { x: center.x + r * Math.cos(rad), y: center.y + r * Math.sin(rad) };
     }
 
-    function getArcPath(cx, cy, r, startDeg, endDeg, forceLarge = false) {
-        const start = polarToXY(startDeg, r, {x:cx, y:cy});
-        const end = polarToXY(endDeg, r, {x:cx, y:cy});
-        
-        let diff = endDeg - startDeg;
-        while (diff < 0) diff += 360;
-        while (diff > 360) diff -= 360;
-
-        const largeArcFlag = forceLarge ? 1 : 0;
-        const sweepFlag = 1; 
-
-        return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} ${sweepFlag} ${end.x} ${end.y}`;
+    // Robust Arc Function
+    function describeArc(x, y, radius, startAngle, endAngle, isLargeArc = false) {
+        const start = polarToXY(startAngle, radius, {x, y});
+        const end = polarToXY(endAngle, radius, {x, y});
+        const largeArcFlag = isLargeArc ? "1" : "0";
+        return ["M", start.x, start.y, "A", radius, radius, 0, largeArcFlag, 1, end.x, end.y].join(" ");
     }
 
     function update() {
@@ -152,49 +146,58 @@
         document.getElementById('line-CB').setAttribute('x2', pts.B.x);
         document.getElementById('line-CB').setAttribute('y2', pts.B.y);
 
-        // --- IMPROVED THEOREM LOGIC ---
-        // Calculate the clockwise distance from A to B
-        let centerDiff = state.B - state.A;
-        while (centerDiff < 0) centerDiff += 360;
+        // Calculate clockwise distance from A to B
+        let diffAB = state.B - state.A;
+        while (diffAB < 0) diffAB += 360;
         
-        // Calculate relative position of C
-        let cRel = state.C - state.A;
-        while (cRel < 0) cRel += 360;
+        // Calculate relative position of C clockwise from A
+        let diffAC = state.C - state.A;
+        while (diffAC < 0) diffAC += 360;
+
+        // Theorem Logic: 
+        // If C is on the short arc (diffAC < diffAB), the angle standing on that arc 
+        // at the center is the REFLEX one.
+        const cOnMinor = diffAC < diffAB;
         
-        // C triggers Reflex mode ONLY if it enters the clockwise arc from A to B
-        const isReflex = cRel > 0 && cRel < centerDiff;
-        
-        let cenAng = isReflex ? 360 - centerDiff : centerDiff;
+        let cenAng, startArc, endArc, isLarge;
+
+        if (cOnMinor) {
+            cenAng = 360 - diffAB;
+            startArc = state.B;
+            endArc = state.A;
+            isLarge = cenAng > 180;
+            warning.style.display = 'block';
+        } else {
+            cenAng = diffAB;
+            startArc = state.A;
+            endArc = state.B;
+            isLarge = cenAng > 180;
+            warning.style.display = isLarge ? 'block' : 'none';
+        }
+
         let circAng = cenAng / 2;
 
-        warning.style.display = isReflex ? 'block' : 'none';
+        // Draw Center Arc
+        document.getElementById('arc-center').setAttribute("d", describeArc(cx, cy, 45, startArc, endArc, isLarge));
 
-        // DRAW CENTER ARC: Always inside the V
-        if (isReflex) {
-            // Long way around
-            document.getElementById('arc-center').setAttribute("d", getArcPath(cx, cy, 45, state.B, state.A, true));
-        } else {
-            // Short way (normal)
-            document.getElementById('arc-center').setAttribute("d", getArcPath(cx, cy, 45, state.A, state.B, false));
-        }
-
-        // DRAW CIRCUMFERENCE ARC
+        // Draw Circumference Arc
         let angCA = Math.atan2(pts.A.y - pts.C.y, pts.A.x - pts.C.x) * 180 / Math.PI;
         let angCB = Math.atan2(pts.B.y - pts.C.y, pts.B.x - pts.C.x) * 180 / Math.PI;
-        let sweep = angCB - angCA;
-        while (sweep < 0) sweep += 360;
-
-        if (sweep < 180) {
-            document.getElementById('arc-circ').setAttribute("d", getArcPath(pts.C.x, pts.C.y, 40, angCA, angCB, false));
+        let cSweep = angCB - angCA;
+        while (cSweep < 0) cSweep += 360;
+        
+        // Always draw the smaller interior arc at C
+        if (cSweep > 180) {
+            document.getElementById('arc-circ').setAttribute("d", describeArc(pts.C.x, pts.C.y, 40, angCB, angCA, false));
         } else {
-            document.getElementById('arc-circ').setAttribute("d", getArcPath(pts.C.x, pts.C.y, 40, angCB, angCA, false));
+            document.getElementById('arc-circ').setAttribute("d", describeArc(pts.C.x, pts.C.y, 40, angCA, angCB, false));
         }
 
-        // FORMATTING LABELS
+        // Labels
         const format = (v) => parseFloat(v.toFixed(2));
-
-        const midCen = isReflex ? (state.B + (360 - centerDiff) / 2) : (state.A + centerDiff / 2);
-        const cp = polarToXY(midCen, 85);
+        
+        const midCen = startArc + (isLarge ? (360 - (endArc - startArc)) : (endArc - startArc)) / 2;
+        const cp = polarToXY(startArc + (cenAng/2), 85);
         document.getElementById('val-center').setAttribute('x', cp.x);
         document.getElementById('val-center').setAttribute('y', cp.y);
         document.getElementById('val-center').textContent = format(cenAng) + "°";
@@ -218,9 +221,7 @@
         if (!state.active) return;
         const cX = e.touches ? e.touches[0].clientX : e.clientX;
         const cY = e.touches ? e.touches[0].clientY : e.clientY;
-        let rawAng = getAng(cX, cY);
-        // Snap to 0.5 deg increments
-        state[state.active] = Math.round(rawAng * 2) / 2;
+        state[state.active] = Math.round(getAng(cX, cY) * 2) / 2;
         update();
     };
 
