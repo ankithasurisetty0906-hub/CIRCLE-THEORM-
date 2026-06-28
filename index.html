@@ -87,13 +87,13 @@
             <div class="controls">
                 <div class="input-group">
                     <label>∠AOB (Center)</label>
-                    <input type="number" id="inp-center" step="0.5">
+                    <input type="text" id="inp-center">
                 </div>
                 <div class="input-group">
                     <label>∠ACB (Circumference)</label>
-                    <input type="number" id="inp-circ" step="0.25">
+                    <input type="text" id="inp-circ">
                 </div>
-                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag C between A and B to trigger the Reflex Case.</p>
+                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag points freely. Type any target angle into the inputs smoothly.</p>
             </div>
         </div>
     </div>
@@ -104,7 +104,7 @@
     const inpCirc = document.getElementById('inp-circ');
     const warning = document.getElementById('warning');
     
-    // Initial Setup: A=Left (210), B=Right (330), C=Top (90)
+    // Core state tracking angles in degrees (0 to 360)
     let state = { A: 210, B: 330, C: 90, active: null };
 
     function polarToXY(deg, r, center = {x:250, y:250}) {
@@ -112,23 +112,23 @@
         return { x: center.x + r * Math.cos(rad), y: center.y + r * Math.sin(rad) };
     }
 
-    // Fixed arc function that respects sweep direction and large-arc flag
-    function getArc(cx, cy, r, startDeg, endDeg, isReflex) {
+    // Unbiased SVG arc drawing configuration
+    function drawSvgArc(cx, cy, r, startDeg, endDeg, takeLongWay) {
         const start = polarToXY(startDeg, r, {x:cx, y:cy});
         const end = polarToXY(endDeg, r, {x:cx, y:cy});
-        
         let diff = endDeg - startDeg;
         while (diff < 0) diff += 360;
+        while (diff > 360) diff -= 360;
         
-        const largeArc = isReflex ? (diff > 180 ? 1 : 1) : (diff > 180 ? 1 : 0);
-        // Sweep is 1 for clockwise. If we want the long way, we use largeArc=1.
-        return `M ${start.x} ${start.y} A ${r} ${r} 0 ${isReflex ? 1 : 0} 1 ${end.x} ${end.y}`;
+        const largeArcFlag = takeLongWay ? 1 : 0;
+        return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`;
     }
 
     function update() {
         const cx = 250, cy = 250, r = 200;
         const pts = { A: polarToXY(state.A, r), B: polarToXY(state.B, r), C: polarToXY(state.C, r) };
 
+        // Position nodes
         ['A', 'B', 'C'].forEach(id => {
             document.getElementById(id).setAttribute('cx', pts[id].x);
             document.getElementById(id).setAttribute('cy', pts[id].y);
@@ -138,6 +138,7 @@
             t.textContent = id;
         });
 
+        // Update Structural Vectors
         document.getElementById('line-OA').setAttribute('x2', pts.A.x);
         document.getElementById('line-OA').setAttribute('y2', pts.A.y);
         document.getElementById('line-OB').setAttribute('x2', pts.B.x);
@@ -151,63 +152,62 @@
         document.getElementById('line-CB').setAttribute('x2', pts.B.x);
         document.getElementById('line-CB').setAttribute('y2', pts.B.y);
 
-        // --- THEOREM LOGIC ---
-        // distance clockwise from A to B (the gap at the bottom)
-        let gapAB = state.B - state.A;
-        while (gapAB < 0) gapAB += 360;
+        // --- STABLE GEOMETRIC CALCULATION (Independent of 0/360 flip) ---
+        let angleA = state.A, angleB = state.B, angleC = state.C;
+        
+        // Normalize relative to A moving counter-clockwise
+        let relB = (angleB - angleA + 360) % 360;
+        let relC = (angleC - angleA + 360) % 360;
 
-        // distance clockwise from A to C
-        let distAC = state.C - state.A;
-        while (distAC < 0) distAC += 360;
+        let isReflex = false;
+        let cenAng = relB;
 
-        // C is on the MINOR ARC if it is inside that gap
-        const cOnMinorArc = distAC < gapAB;
-
-        let cenAng, circAng;
-        if (cOnMinorArc) {
-            // SUBTENDING FROM MINOR ARC = REFLEX CASE
-            cenAng = 360 - gapAB;
-            circAng = cenAng / 2;
-            warning.style.display = 'block';
-            // Draw the long way around
-            document.getElementById('arc-center').setAttribute("d", getArc(cx, cy, 45, state.B, state.A, true));
-        } else {
-            // SUBTENDING FROM MAJOR ARC = NORMAL CASE
-            cenAng = gapAB;
-            circAng = cenAng / 2;
-            warning.style.display = (cenAng > 180) ? 'block' : 'none';
-            // Draw the short way (A to B clockwise)
-            document.getElementById('arc-center').setAttribute("d", getArc(cx, cy, 45, state.A, state.B, cenAng > 180));
+        // If C sits inside the minor arc slice AB, it subtends the major exterior angle
+        if (relC > 0 && relC < relB) {
+            isReflex = true;
+            cenAng = 360 - relB;
         }
 
-        // CIRCUMFERENCE ARC (Always the interior wedge)
-        let angCA = Math.atan2(pts.A.y - pts.C.y, pts.A.x - pts.C.x) * 180 / Math.PI;
-        let angCB = Math.atan2(pts.B.y - pts.C.y, pts.B.x - pts.C.x) * 180 / Math.PI;
-        let cSweep = angCB - angCA;
-        while (cSweep < 0) cSweep += 360;
+        let circAng = cenAng / 2;
+        warning.style.display = isReflex ? 'block' : 'none';
+
+        // --- VISUAL ARC SYSTEM ---
+        if (!isReflex) {
+            // Normal sweep arc from A to B
+            document.getElementById('arc-center').setAttribute("d", drawSvgArc(cx, cy, 45, angleA, angleB, cenAng > 180));
+        } else {
+            // Reflex exterior sweep arc from B to A
+            document.getElementById('arc-center').setAttribute("d", drawSvgArc(cx, cy, 45, angleB, angleA, cenAng > 180));
+        }
+
+        // Circumference internal angle calculation
+        let vecCA = Math.atan2(pts.A.y - pts.C.y, pts.A.x - pts.C.x) * 180 / Math.PI;
+        let vecCB = Math.atan2(pts.B.y - pts.C.y, pts.B.x - pts.C.x) * 180 / Math.PI;
+        let cSweep = (vecCB - vecCA + 360) % 360;
+        
         if (cSweep > 180) {
-            document.getElementById('arc-circ').setAttribute("d", getArc(pts.C.x, pts.C.y, 40, angCB, angCA, false));
+            document.getElementById('arc-circ').setAttribute("d", drawSvgArc(pts.C.x, pts.C.y, 40, vecCB, vecCA, false));
         } else {
-            document.getElementById('arc-circ').setAttribute("d", getArc(pts.C.x, pts.C.y, 40, angCA, angCB, false));
+            document.getElementById('arc-circ').setAttribute("d", drawSvgArc(pts.C.x, pts.C.y, 40, vecCA, vecCB, false));
         }
 
-        // TEXT LABELS
+        // --- LABELS & TEXT FIELDS ---
         const format = (v) => parseFloat(v.toFixed(2));
         
-        // Position Center Label
-        const centerMid = cOnMinorArc ? state.B + (360 - gapAB)/2 : state.A + gapAB/2;
+        // Center label placement vector
+        const centerMid = isReflex ? (angleB + (360 - relB)/2) % 360 : (angleA + relB/2) % 360;
         const cp = polarToXY(centerMid, 80);
         document.getElementById('val-center').setAttribute('x', cp.x);
         document.getElementById('val-center').setAttribute('y', cp.y);
         document.getElementById('val-center').textContent = format(cenAng) + "°";
 
-        // Position Circ Label
-        const crp = polarToXY(state.C, r - 70);
+        // Circumference label placement vector
+        const crp = polarToXY(angleC, r - 70);
         document.getElementById('val-circ').setAttribute('x', crp.x);
         document.getElementById('val-circ').setAttribute('y', crp.y);
         document.getElementById('val-circ').textContent = format(circAng) + "°";
 
-        // SAFE INPUT UPDATE
+        // Strictly prevent updates to text value strings while user has an active typing cursor
         if (document.activeElement !== inpCenter) inpCenter.value = format(cenAng);
         if (document.activeElement !== inpCirc) inpCirc.value = format(circAng);
     }
@@ -233,21 +233,26 @@
     window.addEventListener('mouseup', () => state.active = null);
     window.addEventListener('touchend', () => state.active = null);
 
-    inpCenter.addEventListener('input', e => { 
+    // Filter validation logic allowing structural smooth backspacing variations
+    inpCenter.addEventListener('input', e => {
         let val = parseFloat(e.target.value);
-        if (!isNaN(val)) {
-            state.B = (state.A + val) % 360; 
-            update(); 
+        if (!isNaN(val) && val >= 0 && val <= 360) {
+            state.B = (state.A + val) % 360;
+            update();
         }
     });
 
-    inpCirc.addEventListener('input', e => { 
+    inpCirc.addEventListener('input', e => {
         let val = parseFloat(e.target.value);
-        if (!isNaN(val)) {
-            state.B = (state.A + (val * 2)) % 360; 
-            update(); 
+        if (!isNaN(val) && val >= 0 && val <= 180) {
+            state.B = (state.A + (val * 2)) % 360;
+            update();
         }
     });
+
+    // Sync input fields clean upon backing away/losing input focus
+    inpCenter.addEventListener('blur', update);
+    inpCirc.addEventListener('blur', update);
     
     update();
 </script>
