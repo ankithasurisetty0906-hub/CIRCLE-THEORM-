@@ -93,7 +93,7 @@
                     <label>∠ACB (Circumference)</label>
                     <input type="text" id="inp-circ">
                 </div>
-                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag points freely. Backspace and type tracking are completely fixed.</p>
+                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag points freely. Reflex detection and text inputs are completely synchronized.</p>
             </div>
         </div>
     </div>
@@ -114,7 +114,6 @@
     function drawSvgArc(cx, cy, r, startDeg, endDeg, largeArc) {
         const start = polarToXY(startDeg, r, {x:cx, y:cy});
         const end = polarToXY(endDeg, r, {x:cx, y:cy});
-        let diff = (endDeg - startDeg + 360) % 360;
         return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc ? 1 : 0} 1 ${end.x} ${end.y}`;
     }
 
@@ -144,48 +143,56 @@
         document.getElementById('line-CB').setAttribute('x2', pts.B.x);
         document.getElementById('line-CB').setAttribute('y2', pts.B.y);
 
-        // --- PURE GEOMETRIC MATH SYSTEM ---
-        // Vector analysis from point C to A and B
-        let vCA = { x: pts.A.x - pts.C.x, y: pts.A.y - pts.C.y };
-        let vCB = { x: pts.B.x - pts.C.x, y: pts.B.y - pts.C.y };
-        
-        let angCA = Math.atan2(vCA.y, vCA.x) * 180 / Math.PI;
-        let angCB = Math.atan2(vCB.y, vCB.x) * 180 / Math.PI;
-        
-        // Circumference interior angle calculation
-        let circAng = (angCB - angCA + 360) % 360;
-        if (circAng > 180) circAng = 360 - circAng;
+        // --- FIXED ARC SELECTION SYSTEM ---
+        // Find out which way creates the smaller angle wedge between A and B
+        let diffCW = (state.B - state.A + 360) % 360; 
+        let startMinor, endMinor, minorArcSize;
 
-        // Determine if C sits on the minor arc side by cross product orientation
-        let relB = (state.B - state.A + 360) % 360;
-        let relC = (state.C - state.A + 360) % 360;
-        let isReflex = (relC > 0 && relC < relB);
+        if (diffCW <= 180) {
+            startMinor = state.A;
+            endMinor = state.B;
+            minorArcSize = diffCW;
+        } else {
+            startMinor = state.B;
+            endMinor = state.A;
+            minorArcSize = 360 - diffCW;
+        }
 
-        // Center angle scales directly from the true geometric circumference intercept
-        let cenAng = isReflex ? (360 - relB) : relB;
-        circAng = cenAng / 2;
+        // Check if C is inside that minor arc wedge
+        let relC = (state.C - startMinor + 360) % 360;
+        let isReflex = (relC > 0 && relC < minorArcSize);
+
+        // Compute true math values cleanly
+        let cenAng = isReflex ? (360 - minorArcSize) : minorArcSize;
+        let circAng = cenAng / 2;
 
         warning.style.display = isReflex ? 'block' : 'none';
 
-        // --- VISUAL ARCS ---
+        // --- VISUAL ARCS RENDERING ---
         if (!isReflex) {
-            document.getElementById('arc-center').setAttribute("d", drawSvgArc(cx, cy, 45, state.A, state.B, cenAng > 180));
+            // Normal: Draw inner arc across the minor wedge
+            document.getElementById('arc-center').setAttribute("d", drawSvgArc(cx, cy, 45, startMinor, endMinor, false));
         } else {
-            document.getElementById('arc-center').setAttribute("d", drawSvgArc(cx, cy, 45, state.B, state.A, cenAng > 180));
+            // Reflex: Draw outer arc wrapping the long way around
+            document.getElementById('arc-center').setAttribute("d", drawSvgArc(cx, cy, 45, endMinor, startMinor, true));
         }
 
+        // Circumference Angle Arc
+        let angCA = Math.atan2(pts.A.y - pts.C.y, pts.A.x - pts.C.x) * 180 / Math.PI;
+        let angCB = Math.atan2(pts.B.y - pts.C.y, pts.B.x - pts.C.x) * 180 / Math.PI;
         let cSweep = (angCB - angCA + 360) % 360;
+        
         if (cSweep > 180) {
             document.getElementById('arc-circ').setAttribute("d", drawSvgArc(pts.C.x, pts.C.y, 40, angCB, angCA, false));
         } else {
             document.getElementById('arc-circ').setAttribute("d", drawSvgArc(pts.C.x, pts.C.y, 40, angCA, angCB, false));
         }
 
-        // --- LABELS ---
+        // --- LABEL POSITIONING ---
         const format = (v) => parseFloat(v.toFixed(2));
         
-        let centerMid = isReflex ? (state.B + (360 - relB)/2) % 360 : (state.A + relB/2) % 360;
-        let cp = polarToXY(centerMid, 80);
+        let centerMid = isReflex ? (endMinor + (360 - minorArcSize)/2) % 360 : (startMinor + minorArcSize/2) % 360;
+        let cp = polarToXY(centerMid, 75);
         document.getElementById('val-center').setAttribute('x', cp.x);
         document.getElementById('val-center').setAttribute('y', cp.y);
         document.getElementById('val-center').textContent = format(cenAng) + "°";
@@ -195,7 +202,7 @@
         document.getElementById('val-circ').setAttribute('y', crp.y);
         document.getElementById('val-circ').textContent = format(circAng) + "°";
 
-        // --- INPUT LOCK INTEGRITY ---
+        // Sync inputs safely without breaking current edits
         if (document.activeElement !== inpCenter) inpCenter.value = format(cenAng);
         if (document.activeElement !== inpCirc) inpCirc.value = format(circAng);
     }
@@ -221,7 +228,7 @@
     window.addEventListener('mouseup', () => state.active = null);
     window.addEventListener('touchend', () => state.active = null);
 
-    // Completely decoupled inputs allowing smooth typing and backspacing transitions
+    // Inputs update state configuration cleanly
     inpCenter.addEventListener('input', e => {
         let val = parseFloat(e.target.value);
         if (!isNaN(val) && val >= 0 && val <= 360) {
