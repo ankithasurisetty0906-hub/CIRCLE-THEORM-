@@ -38,9 +38,9 @@
             font-size: 1.4rem; font-weight: bold; color: #1e293b; text-align: center;
         }
 
-        .angle-arc { fill: rgba(219, 39, 119, 0.1); stroke-width: 3; stroke-linecap: round; }
+        .angle-arc { fill: none; stroke-width: 3; stroke-linecap: round; opacity: 0.8; }
         .arc-center { stroke: var(--secondary); }
-        .arc-circ { stroke: var(--primary); fill: rgba(37, 99, 235, 0.1); }
+        .arc-circ { stroke: var(--primary); }
         .angle-label { font-size: 20px; font-weight: 800; pointer-events: none; }
         .center-val { fill: var(--secondary); }
         .circ-val { fill: var(--primary); }
@@ -93,7 +93,7 @@
                     <label>∠ACB (Circumference)</label>
                     <input type="number" id="inp-circ" step="0.25">
                 </div>
-                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag A, B, or C. Use inputs to set reflex angles manually.</p>
+                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag C between A and B to trigger the Reflex Case.</p>
             </div>
         </div>
     </div>
@@ -104,7 +104,7 @@
     const inpCirc = document.getElementById('inp-circ');
     const warning = document.getElementById('warning');
     
-    // Default: A is Left (210), B is Right (330), C is Top (90)
+    // Initial Setup: A=Left (210), B=Right (330), C=Top (90)
     let state = { A: 210, B: 330, C: 90, active: null };
 
     function polarToXY(deg, r, center = {x:250, y:250}) {
@@ -112,12 +112,17 @@
         return { x: center.x + r * Math.cos(rad), y: center.y + r * Math.sin(rad) };
     }
 
-    // Robust Arc Function
-    function describeArc(x, y, radius, startAngle, endAngle, isLargeArc = false) {
-        const start = polarToXY(startAngle, radius, {x, y});
-        const end = polarToXY(endAngle, radius, {x, y});
-        const largeArcFlag = isLargeArc ? "1" : "0";
-        return ["M", start.x, start.y, "A", radius, radius, 0, largeArcFlag, 1, end.x, end.y].join(" ");
+    // Fixed arc function that respects sweep direction and large-arc flag
+    function getArc(cx, cy, r, startDeg, endDeg, isReflex) {
+        const start = polarToXY(startDeg, r, {x:cx, y:cy});
+        const end = polarToXY(endDeg, r, {x:cx, y:cy});
+        
+        let diff = endDeg - startDeg;
+        while (diff < 0) diff += 360;
+        
+        const largeArc = isReflex ? (diff > 180 ? 1 : 1) : (diff > 180 ? 1 : 0);
+        // Sweep is 1 for clockwise. If we want the long way, we use largeArc=1.
+        return `M ${start.x} ${start.y} A ${r} ${r} 0 ${isReflex ? 1 : 0} 1 ${end.x} ${end.y}`;
     }
 
     function update() {
@@ -146,69 +151,65 @@
         document.getElementById('line-CB').setAttribute('x2', pts.B.x);
         document.getElementById('line-CB').setAttribute('y2', pts.B.y);
 
-        // Calculate clockwise distance from A to B
-        let diffAB = state.B - state.A;
-        while (diffAB < 0) diffAB += 360;
-        
-        // Calculate relative position of C clockwise from A
-        let diffAC = state.C - state.A;
-        while (diffAC < 0) diffAC += 360;
+        // --- THEOREM LOGIC ---
+        // distance clockwise from A to B (the gap at the bottom)
+        let gapAB = state.B - state.A;
+        while (gapAB < 0) gapAB += 360;
 
-        // Theorem Logic: 
-        // If C is on the short arc (diffAC < diffAB), the angle standing on that arc 
-        // at the center is the REFLEX one.
-        const cOnMinor = diffAC < diffAB;
-        
-        let cenAng, startArc, endArc, isLarge;
+        // distance clockwise from A to C
+        let distAC = state.C - state.A;
+        while (distAC < 0) distAC += 360;
 
-        if (cOnMinor) {
-            cenAng = 360 - diffAB;
-            startArc = state.B;
-            endArc = state.A;
-            isLarge = cenAng > 180;
+        // C is on the MINOR ARC if it is inside that gap
+        const cOnMinorArc = distAC < gapAB;
+
+        let cenAng, circAng;
+        if (cOnMinorArc) {
+            // SUBTENDING FROM MINOR ARC = REFLEX CASE
+            cenAng = 360 - gapAB;
+            circAng = cenAng / 2;
             warning.style.display = 'block';
+            // Draw the long way around
+            document.getElementById('arc-center').setAttribute("d", getArc(cx, cy, 45, state.B, state.A, true));
         } else {
-            cenAng = diffAB;
-            startArc = state.A;
-            endArc = state.B;
-            isLarge = cenAng > 180;
-            warning.style.display = isLarge ? 'block' : 'none';
+            // SUBTENDING FROM MAJOR ARC = NORMAL CASE
+            cenAng = gapAB;
+            circAng = cenAng / 2;
+            warning.style.display = (cenAng > 180) ? 'block' : 'none';
+            // Draw the short way (A to B clockwise)
+            document.getElementById('arc-center').setAttribute("d", getArc(cx, cy, 45, state.A, state.B, cenAng > 180));
         }
 
-        let circAng = cenAng / 2;
-
-        // Draw Center Arc
-        document.getElementById('arc-center').setAttribute("d", describeArc(cx, cy, 45, startArc, endArc, isLarge));
-
-        // Draw Circumference Arc
+        // CIRCUMFERENCE ARC (Always the interior wedge)
         let angCA = Math.atan2(pts.A.y - pts.C.y, pts.A.x - pts.C.x) * 180 / Math.PI;
         let angCB = Math.atan2(pts.B.y - pts.C.y, pts.B.x - pts.C.x) * 180 / Math.PI;
         let cSweep = angCB - angCA;
         while (cSweep < 0) cSweep += 360;
-        
-        // Always draw the smaller interior arc at C
         if (cSweep > 180) {
-            document.getElementById('arc-circ').setAttribute("d", describeArc(pts.C.x, pts.C.y, 40, angCB, angCA, false));
+            document.getElementById('arc-circ').setAttribute("d", getArc(pts.C.x, pts.C.y, 40, angCB, angCA, false));
         } else {
-            document.getElementById('arc-circ').setAttribute("d", describeArc(pts.C.x, pts.C.y, 40, angCA, angCB, false));
+            document.getElementById('arc-circ').setAttribute("d", getArc(pts.C.x, pts.C.y, 40, angCA, angCB, false));
         }
 
-        // Labels
+        // TEXT LABELS
         const format = (v) => parseFloat(v.toFixed(2));
         
-        const midCen = startArc + (isLarge ? (360 - (endArc - startArc)) : (endArc - startArc)) / 2;
-        const cp = polarToXY(startArc + (cenAng/2), 85);
+        // Position Center Label
+        const centerMid = cOnMinorArc ? state.B + (360 - gapAB)/2 : state.A + gapAB/2;
+        const cp = polarToXY(centerMid, 80);
         document.getElementById('val-center').setAttribute('x', cp.x);
         document.getElementById('val-center').setAttribute('y', cp.y);
         document.getElementById('val-center').textContent = format(cenAng) + "°";
 
+        // Position Circ Label
         const crp = polarToXY(state.C, r - 70);
         document.getElementById('val-circ').setAttribute('x', crp.x);
         document.getElementById('val-circ').setAttribute('y', crp.y);
         document.getElementById('val-circ').textContent = format(circAng) + "°";
 
-        inpCenter.value = format(cenAng);
-        inpCirc.value = format(circAng);
+        // SAFE INPUT UPDATE
+        if (document.activeElement !== inpCenter) inpCenter.value = format(cenAng);
+        if (document.activeElement !== inpCirc) inpCirc.value = format(circAng);
     }
 
     const getAng = (x, y) => {
@@ -233,14 +234,19 @@
     window.addEventListener('touchend', () => state.active = null);
 
     inpCenter.addEventListener('input', e => { 
-        let val = parseFloat(e.target.value) || 0;
-        state.B = (state.A + val) % 360; 
-        update(); 
+        let val = parseFloat(e.target.value);
+        if (!isNaN(val)) {
+            state.B = (state.A + val) % 360; 
+            update(); 
+        }
     });
+
     inpCirc.addEventListener('input', e => { 
-        let val = parseFloat(e.target.value) || 0;
-        state.B = (state.A + (val * 2)) % 360; 
-        update(); 
+        let val = parseFloat(e.target.value);
+        if (!isNaN(val)) {
+            state.B = (state.A + (val * 2)) % 360; 
+            update(); 
+        }
     });
     
     update();
