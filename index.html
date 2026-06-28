@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Circle Theorem: Side-by-Side</title>
+    <title>Circle Theorem: A-B-C</title>
     <style>
         :root { --primary: #2563eb; --secondary: #db2777; --bg: #f8fafc; }
         body { font-family: system-ui, sans-serif; background: var(--bg); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 10px; }
@@ -16,15 +16,13 @@
 
         h1 { margin: 0 0 1.5rem 0; font-size: 1.4rem; text-align: center; color: #1e293b; width: 100%; }
 
-        /* This creates the Side-by-Side Layout */
         .app-container { 
             display: flex; 
-            flex-direction: row; /* Horizontal layout */
+            flex-direction: row; 
             align-items: center; 
             gap: 30px; 
         }
 
-        /* Logic for smaller screens (like phones) */
         @media (max-width: 750px) {
             .app-container { flex-direction: column; }
             .card { max-width: 500px; }
@@ -54,7 +52,6 @@
         }
         input:focus { outline: none; border-color: var(--primary); background: #fff; }
 
-        /* Drawing Styles */
         .angle-arc { fill: none; stroke-width: 3; opacity: 0.6; stroke-linecap: round; }
         .arc-center { stroke: var(--secondary); }
         .arc-circ { stroke: var(--primary); }
@@ -105,13 +102,14 @@
             <div class="controls">
                 <div class="input-group">
                     <label>∠AOB (Center)</label>
-                    <input type="number" id="inp-center">
+                    <!-- step="0.5" allows decimal increments -->
+                    <input type="number" id="inp-center" step="0.5">
                 </div>
                 <div class="input-group">
                     <label>∠ACB (Circumference)</label>
-                    <input type="number" id="inp-circ">
+                    <input type="number" id="inp-circ" step="0.5">
                 </div>
-                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag points A, B, or C around the circle to see the relationship.</p>
+                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag A, B, or C. Use inputs for precise 0.5° steps.</p>
             </div>
         </div>
     </div>
@@ -121,7 +119,9 @@
     const inpCenter = document.getElementById('inp-center');
     const inpCirc = document.getElementById('inp-circ');
     const warning = document.getElementById('warning');
-    let state = { A: 210, B: 330, C: 60, active: null };
+    
+    // Initialized so A is usually left, B right, C top
+    let state = { A: 150, B: 30, C: 270, active: null };
 
     function polarToXY(deg, r, center = {x:250, y:250}) {
         const rad = deg * Math.PI / 180;
@@ -142,8 +142,9 @@
         const pts = { A: polarToXY(state.A, r), B: polarToXY(state.B, r), C: polarToXY(state.C, r) };
 
         ['A', 'B', 'C'].forEach(id => {
-            document.getElementById(id).setAttribute('cx', pts[id].x);
-            document.getElementById(id).setAttribute('cy', pts[id].y);
+            const el = document.getElementById(id);
+            el.setAttribute('cx', pts[id].x);
+            el.setAttribute('cy', pts[id].y);
             const t = document.getElementById('txt-' + id);
             const pos = polarToXY(state[id], r + 35);
             t.setAttribute('x', pos.x - 8); t.setAttribute('y', pos.y + 8);
@@ -163,20 +164,25 @@
         document.getElementById('line-CB').setAttribute('x2', pts.B.x);
         document.getElementById('line-CB').setAttribute('y2', pts.B.y);
 
-        let diff = state.B - state.A;
+        // Logic for Angle AOB (Center Angle)
+        let diff = state.A - state.B; 
         if (diff < 0) diff += 360;
-        let cRel = state.C - state.A;
+        
+        // Determine if C is on the minor or major arc to trigger reflex mode
+        let cRel = state.C - state.B;
         if (cRel < 0) cRel += 360;
         const isReflex = cRel > 0 && cRel < diff;
         
         let cenAng = isReflex ? 360 - diff : diff;
         warning.style.display = isReflex ? 'block' : 'none';
-        let circAng = Math.round(cenAng / 2);
+        
+        // ALLOW DECIMALS (0.5)
+        let circAng = cenAng / 2;
 
         if (isReflex) {
-            document.getElementById('arc-center').setAttribute("d", drawArc(cx, cy, 40, state.B, state.A, 1));
-        } else {
             document.getElementById('arc-center').setAttribute("d", drawArc(cx, cy, 40, state.A, state.B, 1));
+        } else {
+            document.getElementById('arc-center').setAttribute("d", drawArc(cx, cy, 40, state.B, state.A, 1));
         }
 
         let angCA = Math.atan2(pts.A.y - pts.C.y, pts.A.x - pts.C.x) * 180 / Math.PI;
@@ -186,19 +192,20 @@
         while (cDiff > 180) cDiff -= 360;
         document.getElementById('arc-circ').setAttribute("d", drawArc(pts.C.x, pts.C.y, 40, angCA, angCB, cDiff > 0 ? 1 : 0));
 
-        const midCen = isReflex ? (state.B + (360-diff)/2) : (state.A + diff/2);
+        // Update Labels
+        const midCen = isReflex ? (state.A + (360-diff)/2) : (state.B + diff/2);
         const cp = polarToXY(midCen, 75);
-        document.getElementById('val-center').setAttribute('x', cp.x - 15);
+        document.getElementById('val-center').setAttribute('x', cp.x - 20);
         document.getElementById('val-center').setAttribute('y', cp.y + 7);
-        document.getElementById('val-center').textContent = Math.round(cenAng) + "°";
+        document.getElementById('val-center').textContent = parseFloat(cenAng.toFixed(1)) + "°";
 
         const crp = polarToXY(state.C, r - 60);
-        document.getElementById('val-circ').setAttribute('x', crp.x - 15);
+        document.getElementById('val-circ').setAttribute('x', crp.x - 20);
         document.getElementById('val-circ').setAttribute('y', crp.y + 7);
-        document.getElementById('val-circ').textContent = circAng + "°";
+        document.getElementById('val-circ').textContent = parseFloat(circAng.toFixed(1)) + "°";
 
-        inpCenter.value = Math.round(cenAng);
-        inpCirc.value = circAng;
+        inpCenter.value = parseFloat(cenAng.toFixed(1));
+        inpCirc.value = parseFloat(circAng.toFixed(1));
     }
 
     const getAng = (x, y) => {
@@ -211,6 +218,7 @@
         if (!state.active) return;
         const cX = e.touches ? e.touches[0].clientX : e.clientX;
         const cY = e.touches ? e.touches[0].clientY : e.clientY;
+        // Dragging snaps to whole numbers, but input allows 0.5
         state[state.active] = Math.round(getAng(cX, cY));
         update();
     };
@@ -222,8 +230,18 @@
     window.addEventListener('mouseup', () => state.active = null);
     window.addEventListener('touchend', () => state.active = null);
 
-    inpCenter.addEventListener('input', e => { state.B = (state.A + (parseInt(e.target.value) || 0)) % 360; update(); });
-    inpCirc.addEventListener('input', e => { state.B = (state.A + ((parseInt(e.target.value) || 0) * 2)) % 360; update(); });
+    // Support for 0.5 steps in input
+    inpCenter.addEventListener('input', e => { 
+        let val = parseFloat(e.target.value) || 0;
+        state.A = (state.B + val) % 360; 
+        update(); 
+    });
+    inpCirc.addEventListener('input', e => { 
+        let val = parseFloat(e.target.value) || 0;
+        state.A = (state.B + (val * 2)) % 360; 
+        update(); 
+    });
+    
     update();
 </script>
 </body>
