@@ -93,7 +93,7 @@
                     <label>∠ACB (Circumference)</label>
                     <input type="text" id="inp-circ">
                 </div>
-                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag points freely. Inputs and reflex tracking are completely robust across all boundaries.</p>
+                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag points freely. Math logic and textbox entry are perfectly unified.</p>
             </div>
         </div>
     </div>
@@ -143,37 +143,38 @@
         document.getElementById('line-CB').setAttribute('x2', pts.B.x);
         document.getElementById('line-CB').setAttribute('y2', pts.B.y);
 
-        // --- RELIABLE SECTOR SYSTEM ---
-        let diffCW = (state.B - state.A + 360) % 360; 
-        let startMinor, endMinor, minorArcSize;
+        // --- DEFINITIVE PATH TRACKING SYSTEM ---
+        // Path 1 size: Clockwise from A to B
+        let path1Size = (state.B - state.A + 360) % 360;
+        // Path 2 size: Clockwise from B to A
+        let path2Size = (state.A - state.B + 360) % 360;
 
-        if (diffCW <= 180) {
-            startMinor = state.A;
-            endMinor = state.B;
-            minorArcSize = diffCW;
+        // Is C sitting on Path 1?
+        let relC = (state.C - state.A + 360) % 360;
+        let cIsOnPath1 = (relC > 0 && relC < path1Size);
+
+        let cenAng, startArc, endArc;
+        
+        if (cIsOnPath1) {
+            // C is on Path 1, so the subtended arc is Path 2 (B to A clockwise)
+            cenAng = path2Size;
+            startArc = state.B;
+            endArc = state.A;
         } else {
-            startMinor = state.B;
-            endMinor = state.A;
-            minorArcSize = 360 - diffCW;
+            // C is on Path 2, so the subtended arc is Path 1 (A to B clockwise)
+            cenAng = path1Size;
+            startArc = state.A;
+            endArc = state.B;
         }
 
-        // Check whether C rests on the minor arc wedge
-        let relC = (state.C - startMinor + 360) % 360;
-        let isReflex = (relC > 0 && relC < minorArcSize);
-
-        let cenAng = isReflex ? (360 - minorArcSize) : minorArcSize;
         let circAng = cenAng / 2;
-
+        let isReflex = cenAng > 180;
         warning.style.display = isReflex ? 'block' : 'none';
 
-        // --- CENTER ARC DESIGNATION ---
-        if (!isReflex) {
-            document.getElementById('arc-center').setAttribute("d", drawSvgArc(cx, cy, 45, startMinor, endMinor, false));
-        } else {
-            document.getElementById('arc-center').setAttribute("d", drawSvgArc(cx, cy, 45, endMinor, startMinor, true));
-        }
+        // --- CENTER ARC ---
+        document.getElementById('arc-center').setAttribute("d", drawSvgArc(cx, cy, 45, startArc, endArc, cenAng > 180));
 
-        // --- CIRCUMFERENCE ARC DESIGNATION ---
+        // --- CIRCUMFERENCE ARC ---
         let angCA = Math.atan2(pts.A.y - pts.C.y, pts.A.x - pts.C.x) * 180 / Math.PI;
         let angCB = Math.atan2(pts.B.y - pts.C.y, pts.B.x - pts.C.x) * 180 / Math.PI;
         let cSweep = (angCB - angCA + 360) % 360;
@@ -184,10 +185,10 @@
             document.getElementById('arc-circ').setAttribute("d", drawSvgArc(pts.C.x, pts.C.y, 40, angCA, angCB, false));
         }
 
-        // --- LABEL PLACEMENT ---
+        // --- LABELS ---
         const format = (v) => parseFloat(v.toFixed(2));
         
-        let centerMid = isReflex ? (endMinor + (360 - minorArcSize)/2) % 360 : (startMinor + minorArcSize/2) % 360;
+        let centerMid = (startArc + cenAng / 2) % 360;
         let cp = polarToXY(centerMid, 75);
         document.getElementById('val-center').setAttribute('x', cp.x);
         document.getElementById('val-center').setAttribute('y', cp.y);
@@ -198,7 +199,7 @@
         document.getElementById('val-circ').setAttribute('y', crp.y);
         document.getElementById('val-circ').textContent = format(circAng) + "°";
 
-        // Protect text contents while editing actively
+        // Protect interactive text changes cleanly
         if (document.activeElement !== inpCenter) inpCenter.value = format(cenAng);
         if (document.activeElement !== inpCirc) inpCirc.value = format(circAng);
     }
@@ -224,22 +225,18 @@
     window.addEventListener('mouseup', () => state.active = null);
     window.addEventListener('touchend', () => state.active = null);
 
-    // Context-aware state modification algorithm to completely fix input lockups
+    // Dynamic input sync based on the position of C
     inpCenter.addEventListener('input', e => {
         let val = parseFloat(e.target.value);
         if (!isNaN(val) && val >= 0 && val <= 360) {
-            let diffCW = (state.B - state.A + 360) % 360;
-            let startMinor = (diffCW <= 180) ? state.A : state.B;
-            let minorArcSize = (diffCW <= 180) ? diffCW : 360 - diffCW;
-            let relC = (state.C - startMinor + 360) % 360;
-            let currentReflex = (relC > 0 && relC < minorArcSize);
+            let path1Size = (state.B - state.A + 360) % 360;
+            let relC = (state.C - state.A + 360) % 360;
+            let cIsOnPath1 = (relC > 0 && relC < path1Size);
 
-            let targetMinorSize = currentReflex ? (360 - val) : val;
-            
-            if (diffCW <= 180) {
-                state.B = (state.A + targetMinorSize) % 360;
+            if (cIsOnPath1) {
+                state.B = (state.A - val + 360) % 360;
             } else {
-                state.B = (state.A - targetMinorSize + 360) % 360;
+                state.B = (state.A + val) % 360;
             }
             update();
         }
@@ -248,18 +245,14 @@
     inpCirc.addEventListener('input', e => {
         let val = parseFloat(e.target.value);
         if (!isNaN(val) && val >= 0 && val <= 180) {
-            let diffCW = (state.B - state.A + 360) % 360;
-            let startMinor = (diffCW <= 180) ? state.A : state.B;
-            let minorArcSize = (diffCW <= 180) ? diffCW : 360 - diffCW;
-            let relC = (state.C - startMinor + 360) % 360;
-            let currentReflex = (relC > 0 && relC < minorArcSize);
+            let path1Size = (state.B - state.A + 360) % 360;
+            let relC = (state.C - state.A + 360) % 360;
+            let cIsOnPath1 = (relC > 0 && relC < path1Size);
 
-            let targetMinorSize = currentReflex ? (360 - (val * 2)) : (val * 2);
-            
-            if (diffCW <= 180) {
-                state.B = (state.A + targetMinorSize) % 360;
+            if (cIsOnPath1) {
+                state.B = (state.A - (val * 2) + 360) % 360;
             } else {
-                state.B = (state.A - targetMinorSize + 360) % 360;
+                state.B = (state.A + (val * 2)) % 360;
             }
             update();
         }
