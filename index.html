@@ -91,7 +91,7 @@
                 </div>
                 <div class="input-group">
                     <label>∠ACB (Circumference)</label>
-                    <input type="number" id="inp-circ" step="0.5">
+                    <input type="number" id="inp-circ" step="0.25">
                 </div>
                 <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag A, B, or C. Points snap to 0.5° increments.</p>
             </div>
@@ -104,7 +104,7 @@
     const inpCirc = document.getElementById('inp-circ');
     const warning = document.getElementById('warning');
     
-    // Initial State: A=Left, B=Right, C=Top
+    // SWAPPED POSITIONS: A is now Left (150), B is now Right (30)
     let state = { A: 150, B: 30, C: 270, active: null };
 
     function polarToXY(deg, r, center = {x:250, y:250}) {
@@ -149,23 +149,24 @@
         document.getElementById('line-CB').setAttribute('x2', pts.B.x);
         document.getElementById('line-CB').setAttribute('y2', pts.B.y);
 
-        // Calculate clockwise difference from A to B
+        // Center difference (Clockwise from A to B)
         let centerDiff = state.B - state.A;
         while (centerDiff < 0) centerDiff += 360;
         
         let cRel = state.C - state.A;
         while (cRel < 0) cRel += 360;
         
-        // Reflex if C is on the minor arc A-B
+        // Reflex mode detection
         const isReflex = cRel > 0 && cRel < centerDiff;
         let cenAng = isReflex ? 360 - centerDiff : centerDiff;
         
-        // Precise math calculation
+        // Mathematical FIX: Ensure precision
+        cenAng = Math.round(cenAng * 2) / 2; 
         let circAng = cenAng / 2;
 
         warning.style.display = isReflex ? 'block' : 'none';
 
-        // Center Arc Logic
+        // Center Arc Rendering
         if (isReflex) {
             if (centerDiff > 180) {
                 document.getElementById('arc-center').setAttribute("d", getArcPath(cx, cy, 45, state.A, state.B, true));
@@ -180,7 +181,7 @@
             }
         }
 
-        // Circumference Arc Logic
+        // Circumference Arc Rendering
         let angCA = Math.atan2(pts.A.y - pts.C.y, pts.A.x - pts.C.x) * 180 / Math.PI;
         let angCB = Math.atan2(pts.B.y - pts.C.y, pts.B.x - pts.C.x) * 180 / Math.PI;
         let sweep = angCB - angCA;
@@ -192,22 +193,22 @@
             document.getElementById('arc-circ').setAttribute("d", getArcPath(pts.C.x, pts.C.y, 40, angCB, angCA, false));
         }
 
-        // Value Formatting (fixes the .5 rounding errors)
-        const formatNum = (n) => parseFloat(Number(n).toFixed(2));
-
+        // Display Formatting
+        const format = (val) => Number(val.toFixed(2));
+        
         const midCen = isReflex ? (state.A + (360 - centerDiff) / 2 + centerDiff) : (state.A + centerDiff / 2);
         const cp = polarToXY(midCen, 85);
         document.getElementById('val-center').setAttribute('x', cp.x);
         document.getElementById('val-center').setAttribute('y', cp.y);
-        document.getElementById('val-center').textContent = formatNum(cenAng) + "°";
+        document.getElementById('val-center').textContent = format(cenAng) + "°";
 
         const crp = polarToXY(state.C, r - 70);
         document.getElementById('val-circ').setAttribute('x', crp.x);
         document.getElementById('val-circ').setAttribute('y', crp.y);
-        document.getElementById('val-circ').textContent = formatNum(circAng) + "°";
+        document.getElementById('val-circ').textContent = format(circAng) + "°";
 
-        inpCenter.value = formatNum(cenAng);
-        inpCirc.value = formatNum(circAng);
+        inpCenter.value = format(cenAng);
+        inpCirc.value = format(circAng);
     }
 
     const getAng = (x, y) => {
@@ -221,7 +222,7 @@
         const cX = e.touches ? e.touches[0].clientX : e.clientX;
         const cY = e.touches ? e.touches[0].clientY : e.clientY;
         let rawAng = getAng(cX, cY);
-        // Snapping to 0.5 degrees during dragging keeps math perfect
+        // Snap dragging to 0.5 deg to maintain clean calculations
         state[state.active] = Math.round(rawAng * 2) / 2;
         update();
     };
