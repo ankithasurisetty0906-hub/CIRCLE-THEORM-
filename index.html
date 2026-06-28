@@ -93,7 +93,7 @@
                     <label>∠ACB (Circumference)</label>
                     <input type="text" id="inp-circ">
                 </div>
-                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag points freely. Math logic and textbox entry are perfectly unified.</p>
+                <p style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin: 0;">Drag points freely. Point C will intelligently step out of the way when typing reflex angles.</p>
             </div>
         </div>
     </div>
@@ -143,25 +143,25 @@
         document.getElementById('line-CB').setAttribute('x2', pts.B.x);
         document.getElementById('line-CB').setAttribute('y2', pts.B.y);
 
-        // --- DEFINITIVE PATH TRACKING SYSTEM ---
-        // Path 1 size: Clockwise from A to B
+        // --- DEFINITIVE GEOMETRIC REFLEX SYSTEM ---
+        // Path 1: Clockwise gap from A to B
         let path1Size = (state.B - state.A + 360) % 360;
-        // Path 2 size: Clockwise from B to A
-        let path2Size = (state.A - state.B + 360) % 360;
+        // Path 2: Clockwise gap from B to A
+        let path2Size = (360 - path1Size) % 360;
 
-        // Is C sitting on Path 1?
+        // Trace where C currently sits
         let relC = (state.C - state.A + 360) % 360;
-        let cIsOnPath1 = (relC > 0 && relC < path1Size);
+        let cIsOnPath1 = (relC >= 0 && relC < path1Size);
 
         let cenAng, startArc, endArc;
         
         if (cIsOnPath1) {
-            // C is on Path 1, so the subtended arc is Path 2 (B to A clockwise)
+            // C is physically on Path 1, so the subtended angle is the opposite path (Path 2)
             cenAng = path2Size;
             startArc = state.B;
             endArc = state.A;
         } else {
-            // C is on Path 2, so the subtended arc is Path 1 (A to B clockwise)
+            // C is physically on Path 2, so the subtended angle is Path 1
             cenAng = path1Size;
             startArc = state.A;
             endArc = state.B;
@@ -171,10 +171,9 @@
         let isReflex = cenAng > 180;
         warning.style.display = isReflex ? 'block' : 'none';
 
-        // --- CENTER ARC ---
-        document.getElementById('arc-center').setAttribute("d", drawSvgArc(cx, cy, 45, startArc, endArc, cenAng > 180));
+        // --- RENDER VISUAL INTERIORS ---
+        document.getElementById('arc-center').setAttribute("d", drawSvgArc(cx, cy, 45, startArc, endArc, isReflex));
 
-        // --- CIRCUMFERENCE ARC ---
         let angCA = Math.atan2(pts.A.y - pts.C.y, pts.A.x - pts.C.x) * 180 / Math.PI;
         let angCB = Math.atan2(pts.B.y - pts.C.y, pts.B.x - pts.C.x) * 180 / Math.PI;
         let cSweep = (angCB - angCA + 360) % 360;
@@ -185,7 +184,7 @@
             document.getElementById('arc-circ').setAttribute("d", drawSvgArc(pts.C.x, pts.C.y, 40, angCA, angCB, false));
         }
 
-        // --- LABELS ---
+        // --- TEXT POSITIONS ---
         const format = (v) => parseFloat(v.toFixed(2));
         
         let centerMid = (startArc + cenAng / 2) % 360;
@@ -199,7 +198,6 @@
         document.getElementById('val-circ').setAttribute('y', crp.y);
         document.getElementById('val-circ').textContent = format(circAng) + "°";
 
-        // Protect interactive text changes cleanly
         if (document.activeElement !== inpCenter) inpCenter.value = format(cenAng);
         if (document.activeElement !== inpCirc) inpCirc.value = format(circAng);
     }
@@ -225,36 +223,32 @@
     window.addEventListener('mouseup', () => state.active = null);
     window.addEventListener('touchend', () => state.active = null);
 
-    // Dynamic input sync based on the position of C
+    // --- SMART INTERACTIVE TYPING UPDATE ENGINE ---
+    function applyTypedAngle(targetCenterAngle) {
+        // Find the midpoint vector between A and B to safely push C to the opposite hemisphere
+        if (targetCenterAngle <= 180) {
+            // Normal case: Make B follow clockwise from A, place C on the major path out of the way
+            state.B = (state.A + targetCenterAngle) % 360;
+            state.C = (state.A + targetCenterAngle + (360 - targetCenterAngle) / 2) % 360;
+        } else {
+            // Reflex case: Set B clockwise, force C into the minor gap so it properly subtends the reflex angle
+            state.B = (state.A + (360 - targetCenterAngle)) % 360;
+            state.C = (state.A + (360 - targetCenterAngle) / 2) % 360;
+        }
+        update();
+    }
+
     inpCenter.addEventListener('input', e => {
         let val = parseFloat(e.target.value);
         if (!isNaN(val) && val >= 0 && val <= 360) {
-            let path1Size = (state.B - state.A + 360) % 360;
-            let relC = (state.C - state.A + 360) % 360;
-            let cIsOnPath1 = (relC > 0 && relC < path1Size);
-
-            if (cIsOnPath1) {
-                state.B = (state.A - val + 360) % 360;
-            } else {
-                state.B = (state.A + val) % 360;
-            }
-            update();
+            applyTypedAngle(val);
         }
     });
 
     inpCirc.addEventListener('input', e => {
         let val = parseFloat(e.target.value);
         if (!isNaN(val) && val >= 0 && val <= 180) {
-            let path1Size = (state.B - state.A + 360) % 360;
-            let relC = (state.C - state.A + 360) % 360;
-            let cIsOnPath1 = (relC > 0 && relC < path1Size);
-
-            if (cIsOnPath1) {
-                state.B = (state.A - (val * 2) + 360) % 360;
-            } else {
-                state.B = (state.A + (val * 2)) % 360;
-            }
-            update();
+            applyTypedAngle(val * 2);
         }
     });
 
